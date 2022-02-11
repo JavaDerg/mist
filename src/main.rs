@@ -1,12 +1,6 @@
 mod string;
 
-use std::borrow::Cow;
-use std::collections::HashMap;
-use std::env::set_current_dir;
-use std::mem::swap;
-use std::ops::{Deref, DerefMut};
-use std::rc::Rc;
-use std::time::Instant;
+use crate::string::parse_string;
 use nom::branch::alt;
 use nom::bytes::complete::{is_a, is_not, tag, take_until};
 use nom::character::complete::{alpha1, alphanumeric0, alphanumeric1, char, digit1, one_of};
@@ -15,7 +9,15 @@ use nom::error::ErrorKind;
 use nom::multi::{many0, many_till, separated_list0};
 use nom::sequence::{delimited, preceded, tuple};
 use nom::{IResult, InputTakeAtPosition, Parser};
-use crate::string::parse_string;
+use std::borrow::Cow;
+use std::collections::HashMap;
+use std::env::set_current_dir;
+use std::hash::Hash;
+use std::io::Write;
+use std::mem::swap;
+use std::ops::{Deref, DerefMut};
+use std::rc::Rc;
+use std::time::Instant;
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 enum Token {
@@ -37,6 +39,10 @@ enum Token {
 enum Operation {
     /// .
     Dup,
+    /// #
+    Drop,
+    /// ~
+    Swap,
     /// @
     Seek,
     /// +
@@ -75,7 +81,7 @@ enum Value {
 }
 
 enum Function {
-    Interop(Rc<dyn Fn(&mut Vm)>),
+    Interop(Rc<dyn Fn(&mut Vm) -> Option<()>>),
     Normal(Vec<Token>),
 }
 
@@ -127,7 +133,7 @@ impl Stack {
                         Some(())
                     }
                 }
-            },
+            }
             Some(_) => {
                 eprintln!("can not seek to none-number");
                 None
@@ -152,7 +158,7 @@ impl Stack {
                     eprintln!("value not a number");
                     None
                 }
-            }
+            },
             Some(_) => {
                 eprintln!("value not a number");
                 None
@@ -163,55 +169,180 @@ impl Stack {
             }
         }
     }
+
+    pub fn pop_bool(&mut self, locals: &HashMap<String, Value>) -> Option<bool> {
+        match self.inner.pop() {
+            Some(Value::Bool(b)) => Some(b),
+            Some(Value::Number(n)) => Some(n != 0),
+            Some(Value::Ref(r)) => match locals.get(&r)? {
+                Value::Bool(b) => Some(*b),
+                Value::Number(n) => Some(*n != 0),
+                _ => {
+                    eprintln!("value not a bool or number");
+                    None
+                }
+            },
+            Some(_) => {
+                eprintln!("value not a bool or number");
+                None
+            }
+            None => {
+                eprintln!("stack empty, failed to pop 1");
+                None
+            }
+        }
+    }
+
+    pub fn pop_body(&mut self, locals: &HashMap<String, Value>) -> Option<Vec<Token>> {
+        match self.inner.pop() {
+            Some(Value::Sequence(ts)) => Some(ts),
+            Some(Value::Ref(r)) => match locals.get(&r)? {
+                Value::Sequence(ts) => Some(ts.clone()),
+                _ => {
+                    eprintln!("value not a sequence");
+                    None
+                }
+            },
+            Some(_) => {
+                eprintln!("value not a sequence");
+                None
+            }
+            None => {
+                eprintln!("stack empty, failed to pop 1");
+                None
+            }
+        }
+    }
+
+    pub fn pop_str(&mut self, locals: &HashMap<String, Value>) -> Option<String> {
+        match self.inner.pop() {
+            Some(Value::String(s)) => Some(s),
+            Some(Value::Ref(r)) => match locals.get(&r)? {
+                Value::String(s) => Some(s.clone()),
+                _ => {
+                    eprintln!("value not a string");
+                    None
+                }
+            },
+            Some(_) => {
+                eprintln!("value not a string");
+                None
+            }
+            None => {
+                eprintln!("stack empty, failed to pop 1");
+                None
+            }
+        }
+    }
+
+    pub fn pop_ref(&mut self, _locals: &HashMap<String, Value>) -> Option<String> {
+        match self.inner.pop() {
+            Some(Value::Ref(s)) => Some(s),
+            Some(_) => {
+                eprintln!("value not a local");
+                None
+            }
+            None => {
+                eprintln!("stack empty, failed to pop 1");
+                None
+            }
+        }
+    }
+
+    pub fn pop_stringified(&mut self, locals: &HashMap<String, Value>) -> Option<String> {
+        let val = self.pop()?;
+        self.stringify(locals, val)
+    }
+
+    fn stringify(&mut self, locals: &HashMap<String, Value>, value: Value) -> Option<String> {
+        Some(match value {
+            Value::String(str) => str,
+            Value::Number(n) => n.to_string(),
+            Value::Bool(b) => b.to_string(),
+            Value::Sequence(_) => {
+                eprintln!("Can not turn sequence into string");
+                None?
+            }
+            Value::Ref(r) => {
+                let r = locals.get(&r)?;
+                return self.stringify(locals, r.clone());
+            }
+        })
+    }
 }
 
 impl<'a> Vm<'a> {
     pub fn op(&mut self, op: Operation) -> Option<()> {
         match op {
             Operation::Dup => self.stack.dup()?,
+            Operation::Drop => drop(self.stack.pop()?),
+            Operation::Swap => {
+                let first = self.stack.pop()?;
+                let second = self.stack.pop()?;
+                self.stack.push(first);
+                self.stack.push(second);
+            }
             Operation::Seek => self.stack.do_seek()?,
             Operation::Add => {
                 let v2 = self.stack.pop_num(&self.locals)?;
                 let v1 = self.stack.pop_num(&self.locals)?;
-                self.stack.push(Value::Number(
-                    v1 + v2
-                ));
+                self.stack.push(Value::Number(v1 + v2));
             }
             Operation::Sub => {
                 let v2 = self.stack.pop_num(&self.locals)?;
                 let v1 = self.stack.pop_num(&self.locals)?;
-                self.stack.push(Value::Number(
-                    v1 - v2
-                ));
+                self.stack.push(Value::Number(v1 - v2));
             }
             Operation::Mul => {
                 let v2 = self.stack.pop_num(&self.locals)?;
                 let v1 = self.stack.pop_num(&self.locals)?;
-                self.stack.push(Value::Number(
-                    v1 * v2
-                ));
+                self.stack.push(Value::Number(v1 * v2));
             }
             Operation::Div => {
                 let v2 = self.stack.pop_num(&self.locals)?;
                 let v1 = self.stack.pop_num(&self.locals)?;
-                self.stack.push(Value::Number(
-                    v1 / v2
-                ));
+                self.stack.push(Value::Number(v1 / v2));
             }
             Operation::Mod => {
                 let v2 = self.stack.pop_num(&self.locals)?;
                 let v1 = self.stack.pop_num(&self.locals)?;
-                self.stack.push(Value::Number(
-                    v1 % v2
-                ));
+                self.stack.push(Value::Number(v1 % v2));
             }
-            Operation::Set => {}
-            Operation::Eq => {}
-            Operation::Neq => {}
-            Operation::Gt => {}
-            Operation::Lt => {}
-            Operation::GtEq => {}
-            Operation::LtEq => {}
+            Operation::Set => {
+                let r = self.stack.pop_ref(&self.locals)?;
+                let val = self.stack.pop()?;
+                self.locals.insert(r, val);
+            }
+            Operation::Eq => {
+                let v2 = self.stack.pop();
+                let v1 = self.stack.pop();
+                self.stack.push(Value::Bool(v1 == v2));
+            }
+            Operation::Neq => {
+                let v2 = self.stack.pop();
+                let v1 = self.stack.pop();
+                self.stack.push(Value::Bool(v1 != v2));
+            }
+            Operation::Gt => {
+                let v2 = self.stack.pop_num(&self.locals)?;
+                let v1 = self.stack.pop_num(&self.locals)?;
+                self.stack.push(Value::Bool(v1 > v2));
+            }
+            Operation::Lt => {
+                let v2 = self.stack.pop_num(&self.locals)?;
+                let v1 = self.stack.pop_num(&self.locals)?;
+                self.stack.push(Value::Bool(v1 < v2));
+            }
+            Operation::GtEq => {
+                let v2 = self.stack.pop_num(&self.locals)?;
+                let v1 = self.stack.pop_num(&self.locals)?;
+                self.stack.push(Value::Bool(v1 >= v2));
+            }
+            Operation::LtEq => {
+                let v2 = self.stack.pop_num(&self.locals)?;
+                let v1 = self.stack.pop_num(&self.locals)?;
+                self.stack.push(Value::Bool(v1 <= v2));
+            }
         }
         Some(())
     }
@@ -229,9 +360,26 @@ impl<'a> Vm<'a> {
                 let fun = f.clone();
                 fun(self);
                 return Some(());
-            },
-            Function::Normal(_) => {}
+            }
+            Function::Normal(ts) => self.eval(ts.clone())?,
         }
+        Some(())
+    }
+
+    pub fn eval(&mut self, token: Vec<Token>) -> Option<()> {
+        let Self {
+            stack,
+            locals,
+            functions,
+            ..
+        } = self;
+        let mut sub = Vm {
+            code: &token,
+            stack: MutCow::Borrowed(stack),
+            locals: MutCow::Borrowed(locals),
+            functions: MutCow::Borrowed(functions),
+        };
+        while let Some(()) = sub.next() {}
         Some(())
     }
 }
@@ -250,15 +398,31 @@ impl<'a> Iterator for Vm<'a> {
             Token::Local(l) => self.stack.push(Value::Ref(l.clone())),
             Token::Operation(o) => self.op(*o)?,
             Token::Call(c) => self.call(c)?,
-            Token::Def(d) => {todo!()}
+            Token::Def(d) => {
+                let body = self.stack.pop_body(&self.locals)?;
+                self.functions.insert(d.clone(), Function::Normal(body));
+            }
             Token::Body(b) => self.stack.push(Value::Sequence(b.clone())),
-            Token::If(t, f) => {todo!()}
-            Token::Loop(l) => {todo!()}
+            Token::If(t, f) => {
+                let bool = self.stack.pop_bool(&self.locals)?;
+                if bool {
+                    self.eval(t.to_vec())?;
+                } else if let Some(ts) = f {
+                    self.eval(ts.to_vec())?;
+                }
+            }
+            Token::Loop(l) => {
+                todo!()
+            }
         }
 
         self.code = &self.code[1..];
         Some(())
     }
+}
+
+fn wst(s: &str) -> IResult<&str, Option<&str>> {
+    opt(alt((single_line_comment, multiline_comment)))(s)
 }
 
 fn main() {
@@ -267,45 +431,79 @@ fn main() {
     let took = st.elapsed();
     eprintln!("Parsing took {}µs\n\n", took.as_micros());
 
-    if !i.trim().is_empty() {
-        eprint!("invalid code");
+    if !i.trim().is_empty() && !i.trim_start().starts_with("//") {
+        eprint!("invalid code {:?}", i.trim());
         return;
     }
 
     let mut vm = Vm {
         code: tokens.as_ref(),
-        stack: MutCow::Owned(Stack {
-            inner: vec![]
-        }),
+        stack: MutCow::Owned(Stack { inner: vec![] }),
         locals: MutCow::Owned(Default::default()),
-        functions: MutCow::Owned(std())
+        functions: MutCow::Owned(std()),
     };
     let st = Instant::now();
     while let Some(()) = vm.next() {}
+    std::io::stdout().flush().unwrap();
     let took = st.elapsed();
-    eprintln!("\n\nExecution took {}s {}ms {}µs", took.as_secs(), took.as_millis() % 1000, took.as_micros() % 1000);
+    eprintln!(
+        "\n\nExecution took {}s {}ms {}µs",
+        took.as_secs(),
+        took.as_millis() % 1000,
+        took.as_micros() % 1000
+    );
+}
+
+macro_rules! interop {
+    ($name:ident, $($body:tt)+) => {
+        (stringify!($name).to_owned(), Function::Interop(Rc::new($($body)+)))
+    };
 }
 
 fn std() -> HashMap<String, Function> {
-    [
-        ("dbg".to_owned(), Function::Interop(Rc::new(|vm| println!("{:?}", vm.stack.pop())))),
+    let map = [
+        interop!(dbg, |vm| {
+            println!("{:?}", vm.stack.pop());
+            Some(())
+        }),
+        interop!(println, |vm| {
+            let val = vm.stack.pop_str(&vm.locals)?;
+            println!("{}", val);
+            Some(())
+        }),
+        interop!(print, |vm| {
+            let val = vm.stack.pop_str(&vm.locals)?;
+            print!("{}", val);
+            Some(())
+        }),
+        interop!(str, |vm| {
+            let val = Value::String(vm.stack.pop_stringified(&vm.locals)?);
+            vm.stack.push(val);
+            Some(())
+        }),
     ]
-        .into_iter()
-        .collect()
+    .into_iter()
+    .collect();
+    map
 }
 
 fn tokens(i: &str) -> IResult<&str, Vec<Token>> {
     many0(token)(i)
 }
 
-fn token(i: &str) -> IResult<&str, Token> {
-    // comments
-    let (i, _) = opt(preceded(
-        space0,
-        alt((single_line_comment, multiline_comment)),
-    ))(i)?;
+fn token(mut i: &str) -> IResult<&str, Token> {
+    // comments & spaces
+    loop {
+        let (ni, _) = space0(i)?;
+        let (ni, r) = opt(alt((single_line_comment, multiline_comment)))(ni)?;
+        if ni.len() != i.len() {
+            i = ni;
+        } else {
+            break;
+        }
+    }
     // remove prepended space characters is present
-    let (i, _) = space0(i)?;
+    // let (i, _) = space0(i)?;
 
     alt((
         num,
@@ -316,9 +514,7 @@ fn token(i: &str) -> IResult<&str, Token> {
         loop_,
         map(body, |body| Token::Body(body)),
         map(parse_string, |str| Token::String(str)),
-        map(preceded(char('$'), name), |fun| {
-            Token::Def(fun.into())
-        }),
+        map(preceded(char('$'), name), |fun| Token::Def(fun.into())),
         map(name, |fun| Token::Call(fun.into())),
     ))(i)
 }
@@ -349,16 +545,19 @@ fn branch(i: &str) -> IResult<&str, Token> {
                 let mut other = vec![];
                 swap(&mut other, &mut c_branch);
                 b_true = Some(other);
-            },
+            }
             Token::Call(ref s) if s == "end" => break,
             _ => c_branch.push(token),
         }
     }
-    Ok((i, if let Some(bt) = b_true {
-        Token::If(bt, Some(c_branch))
-    } else {
-        Token::If(c_branch, None)
-    }))
+    Ok((
+        i,
+        if let Some(bt) = b_true {
+            Token::If(bt, Some(c_branch))
+        } else {
+            Token::If(c_branch, None)
+        },
+    ))
 }
 
 fn body(i: &str) -> IResult<&str, Vec<Token>> {
@@ -370,7 +569,7 @@ fn name(i: &str) -> IResult<&str, &str> {
 }
 
 fn single_line_comment(i: &str) -> IResult<&str, &str> {
-    recognize(tuple((tag("//"), is_not("\r\n"))))(i)
+    recognize(tuple((tag("//"), opt(is_not("\r\n")))))(i)
 }
 
 fn multiline_comment(i: &str) -> IResult<&str, &str> {
@@ -382,13 +581,15 @@ fn op(i: &str) -> IResult<&str, Token> {
         tag("!="),
         tag("<="),
         tag(">="),
-        recognize(one_of(".@+-*/%:=<>")),
+        recognize(one_of(".~#@+-*/%:=<>")),
     ))(i)?;
 
     Ok((
         i,
         Token::Operation(match o {
             "." => Operation::Dup,
+            "#" => Operation::Drop,
+            "~" => Operation::Swap,
             "@" => Operation::Seek,
             "+" => Operation::Add,
             "-" => Operation::Sub,

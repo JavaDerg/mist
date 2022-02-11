@@ -30,8 +30,8 @@ use nom::{Err, IResult};
 /// hexadecimal numerals. We will combine this later with parse_escaped_char
 /// to parse sequences like \u{00AC}.
 fn parse_unicode<'a, E>(input: &'a str) -> IResult<&'a str, char, E>
-    where
-        E: ParseError<&'a str> + FromExternalError<&'a str, std::num::ParseIntError>,
+where
+    E: ParseError<&'a str> + FromExternalError<&'a str, std::num::ParseIntError>,
 {
     // `take_while_m_n` parses between `m` and `n` bytes (inclusive) that match
     // a predicate. `parse_hex` here parses between 1 and 6 hexadecimal numerals.
@@ -61,8 +61,8 @@ fn parse_unicode<'a, E>(input: &'a str) -> IResult<&'a str, char, E>
 
 /// Parse an escaped character: \n, \t, \r, \u{00AC}, etc.
 fn parse_escaped_char<'a, E>(input: &'a str) -> IResult<&'a str, char, E>
-    where
-        E: ParseError<&'a str> + FromExternalError<&'a str, std::num::ParseIntError>,
+where
+    E: ParseError<&'a str> + FromExternalError<&'a str, std::num::ParseIntError>,
 {
     preceded(
         char('\\'),
@@ -110,8 +110,8 @@ enum StringFragment<'a> {
 /// Combine parse_literal, parse_escaped_whitespace, and parse_escaped_char
 /// into a StringFragment.
 fn parse_fragment<'a, E>(input: &'a str) -> IResult<&'a str, StringFragment<'a>, E>
-    where
-        E: ParseError<&'a str> + FromExternalError<&'a str, std::num::ParseIntError>,
+where
+    E: ParseError<&'a str> + FromExternalError<&'a str, std::num::ParseIntError>,
 {
     alt((
         // The `map` combinator runs a parser, then applies a function to the output
@@ -124,8 +124,8 @@ fn parse_fragment<'a, E>(input: &'a str) -> IResult<&'a str, StringFragment<'a>,
 /// Parse a string. Use a loop of parse_fragment and push all of the fragments
 /// into an output string.
 pub fn parse_string<'a, E>(input: &'a str) -> IResult<&'a str, String, E>
-    where
-        E: ParseError<&'a str> + FromExternalError<&'a str, std::num::ParseIntError>,
+where
+    E: ParseError<&'a str> + FromExternalError<&'a str, std::num::ParseIntError>,
 {
     if input.trim_start().is_empty() {
         return Err(Err::Error(E::from_error_kind(input, ErrorKind::Eof)));

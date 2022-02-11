@@ -1,2 +1,13 @@
-"Hello world!" dbg
-69 420 * dbg
+(
+    . 0 = if
+        # 0
+    else . 2 <= if
+        # 1
+    else
+        . 1 - fib
+        ~ 2 - fib
+        +
+    end end
+) $fib
+
+10 fib str println
