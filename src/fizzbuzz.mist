@@ -1,18 +1,19 @@
 0 'i :
 100 'stop :
 
-('i 'stop >=) loop
-    false 'num :
+('i 'stop <=) loop
+    true 'num :
     'i 3 % 0 = if
         "Fizz" print
-        true 'num :
+        false 'num :
     end
     'i 5 % 0 = if
         "Buzz" print
-        true 'num :
+        false 'num :
     end
     'num if
         'i str print
     end
     'i 1 + 'i :
+    "" println
 end

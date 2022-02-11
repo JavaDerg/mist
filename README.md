@@ -5,5 +5,6 @@
 This programming language has been practically created within a day and it is equaly messy, so don't expect anything fancy.
 
 ## Usage
-todo :)
+(WIP)
 
+[SPEC.md](SPEC.md)

@@ -3,7 +3,7 @@ mod string;
 use crate::string::parse_string;
 use nom::branch::alt;
 use nom::bytes::complete::{is_a, is_not, tag, take_until};
-use nom::character::complete::{alpha1, alphanumeric0, alphanumeric1, char, digit1, one_of};
+use nom::character::complete::{alpha0, alpha1, alphanumeric0, alphanumeric1, char, digit1, one_of};
 use nom::combinator::{cut, iterator, map, opt, recognize};
 use nom::error::ErrorKind;
 use nom::multi::{many0, many_till, separated_list0};
@@ -73,6 +73,8 @@ enum Operation {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 enum Value {
+    /// Internal use only
+    Undefined,
     Number(i64),
     Bool(bool),
     String(String),
@@ -267,6 +269,7 @@ impl Stack {
                 let r = locals.get(&r)?;
                 return self.stringify(locals, r.clone());
             }
+            Value::Undefined => "".to_string(),
         })
     }
 }
@@ -314,14 +317,14 @@ impl<'a> Vm<'a> {
                 self.locals.insert(r, val);
             }
             Operation::Eq => {
-                let v2 = self.stack.pop();
-                let v1 = self.stack.pop();
-                self.stack.push(Value::Bool(v1 == v2));
+                let v2 = self.stack.pop()?;
+                let v1 = self.stack.pop()?;
+                self.stack.push(Value::Bool(v1.real_eq(&v2, &self.locals)));
             }
             Operation::Neq => {
-                let v2 = self.stack.pop();
-                let v1 = self.stack.pop();
-                self.stack.push(Value::Bool(v1 != v2));
+                let v2 = self.stack.pop()?;
+                let v1 = self.stack.pop()?;
+                self.stack.push(Value::Bool(!v1.real_eq(&v2, &self.locals)));
             }
             Operation::Gt => {
                 let v2 = self.stack.pop_num(&self.locals)?;
@@ -412,7 +415,14 @@ impl<'a> Iterator for Vm<'a> {
                 }
             }
             Token::Loop(l) => {
-                todo!()
+                let body = self.stack.pop_body(&self.locals)?;
+                loop {
+                    self.eval(body.clone())?;
+                    if !self.stack.pop_bool(&self.locals)? {
+                        break;
+                    }
+                    self.eval(l.clone())?;
+                }
             }
         }
 
@@ -427,7 +437,8 @@ fn wst(s: &str) -> IResult<&str, Option<&str>> {
 
 fn main() {
     let st = Instant::now();
-    let (i, tokens) = tokens(include_str!("test.mist")).unwrap();
+    let code = std::fs::read_to_string("src/test.mist").unwrap();
+    let (i, tokens) = tokens(&code).unwrap();
     let took = st.elapsed();
     eprintln!("Parsing took {}µs\n\n", took.as_micros());
 
@@ -495,7 +506,7 @@ fn token(mut i: &str) -> IResult<&str, Token> {
     // comments & spaces
     loop {
         let (ni, _) = space0(i)?;
-        let (ni, r) = opt(alt((single_line_comment, multiline_comment)))(ni)?;
+        let (ni, _) = opt(alt((single_line_comment, multiline_comment)))(ni)?;
         if ni.len() != i.len() {
             i = ni;
         } else {
@@ -564,8 +575,13 @@ fn body(i: &str) -> IResult<&str, Vec<Token>> {
     delimited(char('('), tokens, preceded(space0, char(')')))(i)
 }
 
+
 fn name(i: &str) -> IResult<&str, &str> {
-    recognize(tuple((alpha1, alphanumeric0)))(i)
+    recognize(tuple((alt((tag("_"), alpha1)), name_inner)))(i)
+}
+
+fn name_inner(i: &str) -> IResult<&str, &str> {
+    i.split_at_position_complete(|x| !x.is_alphanumeric() && x != '_')
 }
 
 fn single_line_comment(i: &str) -> IResult<&str, &str> {
@@ -634,6 +650,19 @@ fn space(i: &str) -> IResult<&str, &str> {
 
 fn not_space(i: &str) -> IResult<&str, &str> {
     i.split_at_position_complete(|item| item.is_whitespace())
+}
+
+impl Value {
+    pub fn real_eq(&self, other: &Self, locals: &HashMap<String, Value>) -> bool {
+        self.explode(locals) == other.explode(locals)
+    }
+
+    pub fn explode(&self, locals: &HashMap<String, Value>) -> Value {
+        match self {
+            Value::Ref(str) => locals.get(str).cloned().unwrap_or(Value::Undefined),
+            x => x.clone(),
+        }
+    }
 }
 
 impl<'a, T> Deref for MutCow<'a, T> {
