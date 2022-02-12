@@ -1,31 +1,42 @@
+//(
+//    . 0 = if
+//        # 0
+//    else
+//        . 2 <= if
+//            # 1
+//        else
+//            . 1 - fib
+//            ~ 2 - fib
+//            +
+//        end
+//    end
+//) $fib
+//
+//16 fib str println
+
 (
+    . 'goal2 :
+    . 2 - 'goal :
+
     . 0 = if
         # 0
     else
         . 2 <= if
             # 1
         else
-            . 1 - fib
-            ~ 2 - fib
-            +
-        end
-    end
-) $fib
-
-34 fib str println
-
-(
-    'goal :
-    . 0 = if
-        # 0
-    else
-        . 2 <= if
-            # 1
-        else
+            1 1 // initial state
             ('goal 0 !=) loop
-
+                1 @ 1 @ +
                 'goal 1 - 'goal :
             end
+            'result :
+            ('goal2 0 !=) loop
+                #
+                'goal2 1 - 'goal2 :
+            end
+            'result
         end
     end
-)
+) $ifib
+
+50 ifib str println

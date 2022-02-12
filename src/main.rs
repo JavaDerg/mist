@@ -437,7 +437,7 @@ fn wst(s: &str) -> IResult<&str, Option<&str>> {
 
 fn main() {
     let st = Instant::now();
-    let code = std::fs::read_to_string("src/test.mist").unwrap();
+    let code = std::fs::read_to_string("src/fib.mist").unwrap();
     let (i, tokens) = tokens(&code).unwrap();
     let took = st.elapsed();
     eprintln!("Parsing took {}µs\n\n", took.as_micros());
