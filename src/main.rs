@@ -436,8 +436,16 @@ fn wst(s: &str) -> IResult<&str, Option<&str>> {
 }
 
 fn main() {
+    let file = match std::env::args().skip(1).next() {
+        Some(f) => f,
+        None => {
+            eprintln!("no input file given");
+            std::process::exit(1);
+        }
+    };
+    let code = std::fs::read_to_string(file).unwrap();
+
     let st = Instant::now();
-    let code = std::fs::read_to_string("src/fib.mist").unwrap();
     let (i, tokens) = tokens(&code).unwrap();
     let took = st.elapsed();
     eprintln!("Parsing took {}µs\n\n", took.as_micros());
