@@ -1,4 +1,5 @@
 mod string;
+mod parser;
 
 use crate::string::parse_string;
 use nom::branch::alt;
@@ -435,7 +436,14 @@ fn wst(s: &str) -> IResult<&str, Option<&str>> {
     opt(alt((single_line_comment, multiline_comment)))(s)
 }
 
+fn tagged(s: &str) -> IResult<&str, &str> {
+    tag("abc")(s)
+}
+
 fn main() {
+    println!("{:?}", tagged("ab"));
+
+
     let file = match std::env::args().skip(1).next() {
         Some(f) => f,
         None => {
