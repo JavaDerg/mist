@@ -78,7 +78,7 @@ Example:
 ## "Locals" 
 (Locals are currently globals, oops...)
 ### Setting:
-```c
+```rust
 42 // first we push our desired value on the stack
 'fancy // then our "local" name
 : // this operation consumes both pushed values and sets the "local" to the value we supplied
@@ -99,7 +99,7 @@ println // we run println after the if as both branches push a string
 
 ## loops
 Let's look at this example countdown from 10 to 1 (inclusive)
-```c
+```rust
 10 'i : // lets set a variable to i
 ('i 0 !=) // we will create a condition for the loop to run here, it is a similar syntax to function definition but we dont provide a name
 loop // we start out loop here
