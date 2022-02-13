@@ -12,7 +12,7 @@ end
 1337
 stack
     1 2 3 4 5 6 7 8 9 10
-    extract // for extracting a value
+    push // for extracting a value
 end
 
 str println // 10
