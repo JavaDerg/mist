@@ -441,9 +441,6 @@ fn tagged(s: &str) -> IResult<&str, &str> {
 }
 
 fn main() {
-    println!("{:?}", tagged("ab"));
-
-
     let file = match std::env::args().skip(1).next() {
         Some(f) => f,
         None => {

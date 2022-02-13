@@ -1,5 +1,5 @@
 use nom::combinator::iterator;
-use nom::{Compare, InputTake, InputTakeAtPosition, IResult};
+use nom::{Compare, Err, InputTake, InputTakeAtPosition, IResult};
 use nom::error::{ErrorKind, ParseError};
 
 #[derive(Clone)]
@@ -28,12 +28,12 @@ pub trait TokenSource {
 impl LinePos {
     pub fn find(&self, str: &str) -> Self {
         let mut lines = 0;
-        let mut pos = 0;
+        let mut pos = self.position;
         let mut r = false;
-        for c in str {
+        for c in str.bytes() {
             match c {
-                '\r' => r = true,
-                '\n' if !r => lines += 1,
+                b'\r' => r = true,
+                b'\n' if !r => lines += 1,
                 _ if r => {
                     r = false;
                     lines += 1;
@@ -75,7 +75,7 @@ impl<'a> InputTake for StrSpan<'a> {
                 ..self.span.clone()
             }
         }, Self {
-            inner: &self.inner[cound..],
+            inner: &self.inner[count..],
             span: Span {
                 index: self.span.index + count,
                 start: np,
@@ -86,10 +86,13 @@ impl<'a> InputTake for StrSpan<'a> {
 }
 
 impl<'a> InputTakeAtPosition for StrSpan<'a> {
-    type Item = StrSpan<'a>;
+    type Item = char;
 
     fn split_at_position<P, E: ParseError<Self>>(&self, predicate: P) -> IResult<Self, Self, E> where P: Fn(Self::Item) -> bool {
-        let (i, o) = self.inner.split_at_position(predicate)?;
+        let (i, o) = self.inner.split_at_position(predicate).map_err(|err: Err<nom::error::Error<&str>>| match err {
+            Err::Incomplete(n) => Err::Incomplete(n),
+            _ => unreachable!(),
+        })?;
         let taken = self.inner.len() - i.len();
         if taken == 0 {
             Ok((self.clone(), Self {
