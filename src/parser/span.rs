@@ -7,17 +7,16 @@ use nom::{
     Needed, UnspecializedInput,
 };
 
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct StrSpan<'a> {
     pub inner: &'a str,
     pub span: Span,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct Span {
-    pub index: usize,
-    pub start: LinePos,
-    pub end: LinePos,
+    pub start: usize,
+    pub end: usize,
 }
 
 #[derive(Copy, Clone, Default, Debug, Eq, PartialEq)]
@@ -31,15 +30,16 @@ impl<'a> StrSpan<'a> {
         Self {
             inner: str,
             span: Span {
-                index: 0,
-                start: LinePos::default(),
-                end: LinePos::default().find(str),
+                start: 0,
+                end: str.len(),
             },
         }
     }
 }
 
-pub trait TokenSource {}
+pub trait TokenSource {
+    fn document(&self) -> &str;
+}
 
 impl LinePos {
     pub fn find(&self, str: &str) -> Self {
@@ -80,30 +80,28 @@ impl<'a> InputTake for StrSpan<'a> {
         Self {
             inner: &self.inner[..count],
             span: Span {
-                end: self.span.start.find(&self.inner[..count]),
-                ..self.span.clone()
+                start: self.span.start,
+                end: self.span.start + count,
             },
         }
     }
 
     fn take_split(&self, count: usize) -> (Self, Self) {
         let (prefix, suffix) = self.inner.split_at(count);
-        let np = self.span.start.find(prefix);
 
         (
             Self {
                 inner: suffix,
                 span: Span {
-                    index: self.span.index + count,
-                    start: np,
+                    start: self.span.start + count,
                     end: self.span.end,
                 },
             },
             Self {
                 inner: prefix,
                 span: Span {
-                    end: np.clone(),
-                    ..self.span.clone()
+                    start: self.span.start,
+                    end: self.span.start + count,
                 },
             },
         )

@@ -14,29 +14,42 @@
 //
 //16 fib str println
 
+//(
+//    . 'goal2 :
+//    . 2 - 'goal :
+//
+//    . 0 = if
+//        # 0
+//    else
+//        . 2 <= if
+//            # 1
+//        else
+//            1 1 // initial state
+//            ('goal 0 !=) loop
+//                1 @ 1 @ +
+//                'goal 1 - 'goal :
+//            end
+//            'result :
+//            ('goal2 0 !=) loop
+//                #
+//                'goal2 1 - 'goal2 :
+//            end
+//            'result
+//        end
+//    end
+//) $ifib
+//
+//50 ifib str println
+
+// new, currently most idiomatic iterative fibonacci sequence generator i can come up with
 (
-    . 'goal2 :
-    . 2 - 'goal :
-
-    . 0 = if
-        # 0
-    else
-        . 2 <= if
-            # 1
-        else
-            1 1 // initial state
-            ('goal 0 !=) loop
-                1 @ 1 @ +
-                'goal 1 - 'goal :
-            end
-            'result :
-            ('goal2 0 !=) loop
-                #
-                'goal2 1 - 'goal2 :
-            end
-            'result
-        end
+    . 1 - 'n :
+    . 2 >= if
+        #
+        1 1
+        0 'n 1 - '_ for 1 @ 1 @ + end
+        0 'n '_ for ~ # end
     end
-) $ifib
+) $fib
 
-50 ifib str println
+50 fib str println

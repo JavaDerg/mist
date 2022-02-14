@@ -1,0 +1,32 @@
+// I don't like this syntax, in fact i hate it, it will not be implemented
+// It feels like a wierd lua/rust clone :c
+
+::Counter type
+    u64 .count
+end
+
+impl ::Counter
+    def ::new
+        {
+            0 .count
+        }::Self
+    end
+    def ::from with (u64 .start) out
+        {
+            .start >.count
+        }::Self
+    end
+end
+
+impl ::Iterator for ::Counter
+    def type ::Item with u64 end
+    def ::next with (&Self .self) out
+        push .self.count
+        .self.count 1 + >.self.count
+    end
+end
+
+69 ::Counter::from
+for with .i
+    .i println
+end

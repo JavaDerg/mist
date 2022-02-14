@@ -1,3 +1,15 @@
-0 10 'i for
-    'i str println
+(
+    . 1 - 'n :
+    . 2 >= if
+        #
+        1 1
+        0 'n 1 - '_ for 1 @ 1 @ + end
+        0 'n '_ for ~ # end
+    end
+) $fib
+
+0 93 'i for
+    'i str print
+    ". " print
+    'i 0 + fib str println
 end

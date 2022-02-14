@@ -9,7 +9,7 @@ use nom::combinator::{cut, map, opt, recognize};
 use nom::error::ErrorKind;
 use nom::multi::many0;
 use nom::sequence::{delimited, preceded, tuple};
-use nom::{IResult, InputTakeAtPosition};
+use nom::{IResult, InputTakeAtPosition, Parser};
 
 use std::collections::HashMap;
 
@@ -547,7 +547,8 @@ fn token(mut i: &str) -> IResult<&str, Token> {
 }
 
 fn for_(i: &str) -> IResult<&str, Token> {
-    let (mut i, _) = tag("for")(i)?;
+    let (i, _) = tag("for")(i)?;
+    let (mut i, _) = space(i)?;
     let mut body = vec![];
     loop {
         let (ni, token) = token(i)?;
@@ -561,7 +562,8 @@ fn for_(i: &str) -> IResult<&str, Token> {
 }
 
 fn loop_(i: &str) -> IResult<&str, Token> {
-    let (mut i, _) = tag("loop")(i)?;
+    let (i, _) = tag("loop")(i)?;
+    let (mut i, _) = space(i)?;
     let mut body = vec![];
     loop {
         let (ni, token) = token(i)?;
@@ -575,7 +577,8 @@ fn loop_(i: &str) -> IResult<&str, Token> {
 }
 
 fn branch(i: &str) -> IResult<&str, Token> {
-    let (mut i, _) = tag("if")(i)?;
+    let (i, _) = tag("if")(i)?;
+    let (mut i, _) = space(i)?;
     let mut c_branch = vec![];
     let mut b_true = None;
     loop {
@@ -661,7 +664,13 @@ fn variable(i: &str) -> IResult<&str, Token> {
 }
 
 fn bool(i: &str) -> IResult<&str, Token> {
-    alt((tag("true"), tag("false")))(i).map(|(i, b)| (i, Token::Bool(b == "true")))
+    tuple((
+        alt((
+            tag("true"),
+            tag("false")
+        )),
+        space
+    ))(i).map(|(i, (b, _))| (i, Token::Bool(b == "true")))
 }
 
 fn num(i: &str) -> IResult<&str, Token> {
@@ -674,6 +683,9 @@ fn space0(i: &str) -> IResult<&str, &str> {
 }
 
 fn space(i: &str) -> IResult<&str, &str> {
+    if i.is_empty() {
+        return Ok(("", ""));
+    }
     i.split_at_position1_complete(|item| !item.is_whitespace(), ErrorKind::Space)
 }
 
