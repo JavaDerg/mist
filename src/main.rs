@@ -1,10 +1,12 @@
-mod string;
 mod parser;
+mod string;
 
 use crate::string::parse_string;
 use nom::branch::alt;
 use nom::bytes::complete::{is_a, is_not, tag, take_until};
-use nom::character::complete::{alpha0, alpha1, alphanumeric0, alphanumeric1, char, digit1, one_of};
+use nom::character::complete::{
+    alpha0, alpha1, alphanumeric0, alphanumeric1, char, digit1, one_of,
+};
 use nom::combinator::{cut, iterator, map, opt, recognize};
 use nom::error::ErrorKind;
 use nom::multi::{many0, many_till, separated_list0};
@@ -587,7 +589,6 @@ fn branch(i: &str) -> IResult<&str, Token> {
 fn body(i: &str) -> IResult<&str, Vec<Token>> {
     delimited(char('('), tokens, preceded(space0, char(')')))(i)
 }
-
 
 fn name(i: &str) -> IResult<&str, &str> {
     recognize(tuple((alt((tag("_"), alpha1)), name_inner)))(i)
