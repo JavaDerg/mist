@@ -4,17 +4,14 @@ mod string;
 use crate::string::parse_string;
 use nom::branch::alt;
 use nom::bytes::complete::{is_not, tag, take_until};
-use nom::character::complete::{
-    alpha1, char, digit1, one_of,
-};
+use nom::character::complete::{alpha1, char, digit1, one_of};
 use nom::combinator::{cut, map, opt, recognize};
 use nom::error::ErrorKind;
-use nom::multi::{many0};
+use nom::multi::many0;
 use nom::sequence::{delimited, preceded, tuple};
 use nom::{IResult, InputTakeAtPosition};
 
 use std::collections::HashMap;
-
 
 use std::io::Write;
 use std::mem::swap;
@@ -36,6 +33,7 @@ enum Token {
     Body(Vec<Token>),
     If(Vec<Token>, Option<Vec<Token>>),
     Loop(Vec<Token>),
+    For(Vec<Token>),
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -418,6 +416,15 @@ impl<'a> Iterator for Vm<'a> {
                     self.eval(ts.to_vec())?;
                 }
             }
+            Token::For(l) => {
+                let var = self.stack.pop_ref(&self.locals)?;
+                let end = self.stack.pop_num(&self.locals)?;
+                let start = self.stack.pop_num(&self.locals)?;
+                for i in start..end {
+                    self.locals.insert(var.clone(), Value::Number(i));
+                    self.eval(l.clone())?;
+                }
+            }
             Token::Loop(l) => {
                 let body = self.stack.pop_body(&self.locals)?;
                 loop {
@@ -530,12 +537,27 @@ fn token(mut i: &str) -> IResult<&str, Token> {
         variable,
         op,
         branch,
+        for_,
         loop_,
         map(body, |body| Token::Body(body)),
         map(parse_string, |str| Token::String(str)),
         map(preceded(char('$'), name), |fun| Token::Def(fun.into())),
         map(name, |fun| Token::Call(fun.into())),
     ))(i)
+}
+
+fn for_(i: &str) -> IResult<&str, Token> {
+    let (mut i, _) = tag("for")(i)?;
+    let mut body = vec![];
+    loop {
+        let (ni, token) = token(i)?;
+        i = ni;
+        match &token {
+            Token::Call(s) if s == "end" => break,
+            _ => body.push(token),
+        }
+    }
+    Ok((i, Token::For(body)))
 }
 
 fn loop_(i: &str) -> IResult<&str, Token> {
@@ -545,7 +567,7 @@ fn loop_(i: &str) -> IResult<&str, Token> {
         let (ni, token) = token(i)?;
         i = ni;
         match &token {
-            Token::Call(ref s) if s == "end" => break,
+            Token::Call(s) if s == "end" => break,
             _ => body.push(token),
         }
     }

@@ -97,6 +97,14 @@ end
 println // we run println after the if as both branches push a string
 ```
 
+## for
+(end exclusive)
+```rust
+0 100 'i for
+    'i str println
+end
+```
+
 ## loops
 Let's look at this example countdown from 10 to 1 (inclusive)
 ```rust

@@ -1,13 +1,5 @@
 # Planed stuff
-## for syntax
-(end exclusive)
-```rust
-0 100 'i for
-    'i str println
-end
-```
-
-## stack block
+## stack syntax
 ```c
 1337
 stack

@@ -1,25 +1,42 @@
+use std::ops::Index;
 use std::str::{CharIndices, Chars};
 
 use nom::error::{ErrorKind, ParseError};
-use nom::{Err, IResult, InputIter, InputLength, InputTake, InputTakeAtPosition, Needed};
+use nom::{
+    Compare, CompareResult, Err, IResult, InputIter, InputLength, InputTake, InputTakeAtPosition,
+    Needed, UnspecializedInput,
+};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct StrSpan<'a> {
     pub inner: &'a str,
     pub span: Span,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Span {
     pub index: usize,
     pub start: LinePos,
-    pub stop: LinePos,
+    pub end: LinePos,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default, Debug, Eq, PartialEq)]
 pub struct LinePos {
     pub line: usize,
     pub position: usize,
+}
+
+impl<'a> StrSpan<'a> {
+    pub fn new(str: &'a str) -> Self {
+        Self {
+            inner: str,
+            span: Span {
+                index: 0,
+                start: LinePos::default(),
+                end: LinePos::default().find(str),
+            },
+        }
+    }
 }
 
 pub trait TokenSource {}
@@ -31,11 +48,16 @@ impl LinePos {
         let mut r = false;
         for c in str.bytes() {
             match c {
-                b'\r' => r = true,
-                b'\n' if !r => lines += 1,
+                b'\r' if !r => r = true,
+                b'\r' if r => { r = true; lines += 1; },
+                b'\n' if !r => {
+                    lines += 1;
+                    pos = 0;
+                }
                 _ if r => {
                     r = false;
                     lines += 1;
+                    pos = 1;
                 }
                 _ => {
                     pos += 1;
@@ -44,6 +66,7 @@ impl LinePos {
         }
         if r {
             lines += 1;
+            pos = 0;
         }
         Self {
             line: self.line + lines,
@@ -57,131 +80,133 @@ impl<'a> InputTake for StrSpan<'a> {
         Self {
             inner: &self.inner[..count],
             span: Span {
-                stop: self.span.start.find(&self.inner[..count]),
+                end: self.span.start.find(&self.inner[..count]),
                 ..self.span.clone()
             },
         }
     }
 
     fn take_split(&self, count: usize) -> (Self, Self) {
-        let slice = &self.inner[..count];
-        let np = self.span.start.find(slice);
+        let (prefix, suffix) = self.inner.split_at(count);
+        let np = self.span.start.find(prefix);
 
         (
             Self {
-                inner: slice,
-                span: Span {
-                    stop: np.clone(),
-                    ..self.span.clone()
-                },
-            },
-            Self {
-                inner: &self.inner[count..],
+                inner: suffix,
                 span: Span {
                     index: self.span.index + count,
                     start: np,
-                    stop: self.span.stop,
+                    end: self.span.end,
+                },
+            },
+            Self {
+                inner: prefix,
+                span: Span {
+                    end: np.clone(),
+                    ..self.span.clone()
                 },
             },
         )
     }
 }
 
-impl<'a> InputTakeAtPosition for StrSpan<'a> {
-    type Item = char;
+impl<'a> UnspecializedInput for StrSpan<'a> {}
 
-    fn split_at_position<P, E: ParseError<Self>>(&self, predicate: P) -> IResult<Self, Self, E>
-    where
-        P: Fn(Self::Item) -> bool,
-    {
-        let (i, o) = self.inner.split_at_position(predicate).map_err(
-            |err: Err<nom::error::Error<&str>>| match err {
-                Err::Incomplete(n) => Err::Incomplete(n),
-                _ => unreachable!(),
-            },
-        )?;
-        let taken = self.inner.len() - i.len();
-        if taken == 0 {
-            Ok((
-                self.clone(),
-                Self {
-                    inner: o,
-                    span: Span {
-                        stop: self.span.start,
-                        ..self.span.clone()
-                    },
-                },
-            ))
-        } else {
-            Ok(self.take_split(taken))
-        }
-    }
-
-    fn split_at_position1<P, E: ParseError<Self>>(
-        &self,
-        predicate: P,
-        e: ErrorKind,
-    ) -> IResult<Self, Self, E>
-    where
-        P: Fn(Self::Item) -> bool,
-    {
-        let (i, _) = self.inner.split_at_position(predicate).map_err(
-            |err: Err<nom::error::Error<&str>>| match err {
-                Err::Incomplete(n) => Err::Incomplete(n),
-                _ => unreachable!(),
-            },
-        )?;
-        let taken = self.inner.len() - i.len();
-        if taken == 0 {
-            Err(Err::Error(E::from_error_kind(self.clone(), e)))
-        } else {
-            Ok(self.take_split(taken))
-        }
-    }
-
-    fn split_at_position_complete<P, E: ParseError<Self>>(
-        &self,
-        predicate: P,
-    ) -> IResult<Self, Self, E>
-    where
-        P: Fn(Self::Item) -> bool,
-    {
-        let (i, o) = self
-            .inner
-            .split_at_position_complete::<_, nom::error::Error<&str>>(predicate)
-            .expect("This should not return any errors");
-        let taken = self.inner.len() - i.len();
-        if taken == 0 {
-            Ok((
-                self.clone(),
-                Self {
-                    inner: o,
-                    span: Span {
-                        stop: self.span.start,
-                        ..self.span.clone()
-                    },
-                },
-            ))
-        } else {
-            Ok(self.take_split(taken))
-        }
-    }
-
-    fn split_at_position1_complete<P, E: ParseError<Self>>(
-        &self,
-        predicate: P,
-        e: ErrorKind,
-    ) -> IResult<Self, Self, E>
-    where
-        P: Fn(Self::Item) -> bool,
-    {
-        self.split_at_position1(predicate, e)
-            .map_err(|err| match err {
-                Err::Incomplete(_) => Err::Error(E::from_error_kind(self.clone(), e)),
-                x => x,
-            })
-    }
-}
+// impl<'a> InputTakeAtPosition for StrSpan<'a> {
+//     type Item = char;
+//
+//     fn split_at_position<P, E: ParseError<Self>>(&self, predicate: P) -> IResult<Self, Self, E>
+//     where
+//         P: Fn(Self::Item) -> bool,
+//     {
+//         let (i, o) = self.inner.split_at_position(predicate).map_err(
+//             |err: Err<nom::error::Error<&str>>| match err {
+//                 Err::Incomplete(n) => Err::Incomplete(n),
+//                 _ => unreachable!(),
+//             },
+//         )?;
+//         let taken = self.inner.len() - i.len();
+//         if taken == 0 {
+//             Ok((
+//                 self.clone(),
+//                 Self {
+//                     inner: o,
+//                     span: Span {
+//                         end: self.span.start,
+//                         ..self.span.clone()
+//                     },
+//                 },
+//             ))
+//         } else {
+//             Ok(self.take_split(taken))
+//         }
+//     }
+//
+//     fn split_at_position1<P, E: ParseError<Self>>(
+//         &self,
+//         predicate: P,
+//         e: ErrorKind,
+//     ) -> IResult<Self, Self, E>
+//     where
+//         P: Fn(Self::Item) -> bool,
+//     {
+//         let (i, _) = self.inner.split_at_position(predicate).map_err(
+//             |err: Err<nom::error::Error<&str>>| match err {
+//                 Err::Incomplete(n) => Err::Incomplete(n),
+//                 _ => unreachable!(),
+//             },
+//         )?;
+//         let taken = self.inner.len() - i.len();
+//         if taken == 0 {
+//             Err(Err::Error(E::from_error_kind(self.clone(), e)))
+//         } else {
+//             Ok(self.take_split(taken))
+//         }
+//     }
+//
+//     fn split_at_position_complete<P, E: ParseError<Self>>(
+//         &self,
+//         predicate: P,
+//     ) -> IResult<Self, Self, E>
+//     where
+//         P: Fn(Self::Item) -> bool,
+//     {
+//         let (i, o) = self
+//             .inner
+//             .split_at_position_complete::<_, nom::error::Error<&str>>(predicate)
+//             .expect("This should not return any errors");
+//         let taken = self.inner.len() - i.len();
+//         if taken == 0 {
+//             Ok((
+//                 self.clone(),
+//                 Self {
+//                     inner: o,
+//                     span: Span {
+//                         end: self.span.start,
+//                         ..self.span.clone()
+//                     },
+//                 },
+//             ))
+//         } else {
+//             Ok(self.take_split(taken))
+//         }
+//     }
+//
+//     fn split_at_position1_complete<P, E: ParseError<Self>>(
+//         &self,
+//         predicate: P,
+//         e: ErrorKind,
+//     ) -> IResult<Self, Self, E>
+//     where
+//         P: Fn(Self::Item) -> bool,
+//     {
+//         self.split_at_position1(predicate, e)
+//             .map_err(|err| match err {
+//                 Err::Incomplete(_) => Err::Error(E::from_error_kind(self.clone(), e)),
+//                 x => x,
+//             })
+//     }
+// }
 
 impl<'a> InputLength for StrSpan<'a> {
     fn input_len(&self) -> usize {
@@ -219,5 +244,25 @@ impl<'a> InputIter for StrSpan<'a> {
             .map(|(i, _)| i)
             .nth(count)
             .ok_or(Needed::Unknown)
+    }
+}
+
+impl<'a> Compare<StrSpan<'a>> for StrSpan<'a> {
+    fn compare(&self, t: StrSpan<'a>) -> CompareResult {
+        self.inner.compare(t.inner)
+    }
+
+    fn compare_no_case(&self, t: StrSpan<'a>) -> CompareResult {
+        self.inner.compare_no_case(t.inner)
+    }
+}
+
+impl<'a> Compare<&'a str> for StrSpan<'a> {
+    fn compare(&self, t: &'a str) -> CompareResult {
+        self.inner.compare(t)
+    }
+
+    fn compare_no_case(&self, t: &'a str) -> CompareResult {
+        self.inner.compare_no_case(t)
     }
 }
