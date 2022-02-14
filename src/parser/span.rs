@@ -1,7 +1,7 @@
 use std::str::{CharIndices, Chars};
-use nom::combinator::iterator;
-use nom::error::{Error, ErrorKind, ParseError};
-use nom::{Compare, Err, IResult, InputIter, InputLength, InputTake, InputTakeAtPosition, Needed};
+
+use nom::error::{ErrorKind, ParseError};
+use nom::{Err, IResult, InputIter, InputLength, InputTake, InputTakeAtPosition, Needed};
 
 #[derive(Clone)]
 pub struct StrSpan<'a> {

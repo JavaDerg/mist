@@ -3,19 +3,19 @@ mod string;
 
 use crate::string::parse_string;
 use nom::branch::alt;
-use nom::bytes::complete::{is_a, is_not, tag, take_until};
+use nom::bytes::complete::{is_not, tag, take_until};
 use nom::character::complete::{
-    alpha0, alpha1, alphanumeric0, alphanumeric1, char, digit1, one_of,
+    alpha1, char, digit1, one_of,
 };
-use nom::combinator::{cut, iterator, map, opt, recognize};
+use nom::combinator::{cut, map, opt, recognize};
 use nom::error::ErrorKind;
-use nom::multi::{many0, many_till, separated_list0};
+use nom::multi::{many0};
 use nom::sequence::{delimited, preceded, tuple};
-use nom::{IResult, InputTakeAtPosition, Parser};
-use std::borrow::Cow;
+use nom::{IResult, InputTakeAtPosition};
+
 use std::collections::HashMap;
-use std::env::set_current_dir;
-use std::hash::Hash;
+
+
 use std::io::Write;
 use std::mem::swap;
 use std::ops::{Deref, DerefMut};
@@ -112,13 +112,14 @@ impl Stack {
     }
 
     pub fn dup(&mut self) -> Option<()> {
-        match self.inner.last() {
-            Some(v) => self.push(v.clone()),
+        let val = match self.inner.last() {
+            Some(v) => v.clone(),
             None => {
                 eprintln!("can not dup on empty stack");
-                None?;
+                None?
             }
-        }
+        };
+        self.push(val);
         Some(())
     }
 
@@ -361,15 +362,15 @@ impl<'a> Vm<'a> {
                 None?
             }
         };
-        match fun {
+        let ts = match fun {
             Function::Interop(f) => {
                 let fun = f.clone();
                 fun(self);
                 return Some(());
             }
-            Function::Normal(ts) => self.eval(ts.clone())?,
-        }
-        Some(())
+            Function::Normal(ts) => ts.clone(),
+        };
+        self.eval(ts)
     }
 
     pub fn eval(&mut self, token: Vec<Token>) -> Option<()> {
@@ -432,14 +433,6 @@ impl<'a> Iterator for Vm<'a> {
         self.code = &self.code[1..];
         Some(())
     }
-}
-
-fn wst(s: &str) -> IResult<&str, Option<&str>> {
-    opt(alt((single_line_comment, multiline_comment)))(s)
-}
-
-fn tagged(s: &str) -> IResult<&str, &str> {
-    tag("abc")(s)
 }
 
 fn main() {
@@ -660,10 +653,6 @@ fn space0(i: &str) -> IResult<&str, &str> {
 
 fn space(i: &str) -> IResult<&str, &str> {
     i.split_at_position1_complete(|item| !item.is_whitespace(), ErrorKind::Space)
-}
-
-fn not_space(i: &str) -> IResult<&str, &str> {
-    i.split_at_position_complete(|item| item.is_whitespace())
 }
 
 impl Value {
