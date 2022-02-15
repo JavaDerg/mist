@@ -664,13 +664,8 @@ fn variable(i: &str) -> IResult<&str, Token> {
 }
 
 fn bool(i: &str) -> IResult<&str, Token> {
-    tuple((
-        alt((
-            tag("true"),
-            tag("false")
-        )),
-        space
-    ))(i).map(|(i, (b, _))| (i, Token::Bool(b == "true")))
+    tuple((alt((tag("true"), tag("false"))), space))(i)
+        .map(|(i, (b, _))| (i, Token::Bool(b == "true")))
 }
 
 fn num(i: &str) -> IResult<&str, Token> {

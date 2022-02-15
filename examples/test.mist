@@ -11,5 +11,5 @@
 0 93 'i for
     'i str print
     ". " print
-    'i 0 + fib str println
+    'i fib str println
 end

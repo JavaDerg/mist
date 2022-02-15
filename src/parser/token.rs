@@ -6,4 +6,6 @@ pub struct Token<S: TokenSource> {
     pub source: S,
 }
 
-pub enum TokenKind {}
+pub enum TokenKind {
+    Literal(String),
+}

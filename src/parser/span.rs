@@ -1,10 +1,13 @@
-use std::ops::Index;
+use std::collections::Bound;
+use std::ops::{Index, Range, RangeBounds, RangeFrom, RangeTo};
+use std::slice::SliceIndex;
 use std::str::{CharIndices, Chars};
 
+use nom::character::complete::u64;
 use nom::error::{ErrorKind, ParseError};
 use nom::{
     Compare, CompareResult, Err, IResult, InputIter, InputLength, InputTake, InputTakeAtPosition,
-    Needed, UnspecializedInput,
+    Needed, Offset, Slice, UnspecializedInput,
 };
 
 #[derive(Copy, Clone, Debug)]
@@ -49,7 +52,10 @@ impl LinePos {
         for c in str.bytes() {
             match c {
                 b'\r' if !r => r = true,
-                b'\r' if r => { r = true; lines += 1; },
+                b'\r' if r => {
+                    r = true;
+                    lines += 1;
+                }
                 b'\n' if !r => {
                     lines += 1;
                     pos = 0;
@@ -262,5 +268,31 @@ impl<'a> Compare<&'a str> for StrSpan<'a> {
 
     fn compare_no_case(&self, t: &'a str) -> CompareResult {
         self.inner.compare_no_case(t)
+    }
+}
+
+impl<'a> Offset for StrSpan<'a> {
+    fn offset(&self, second: &Self) -> usize {
+        second.span.start - self.span.start
+    }
+}
+
+impl<'a, R: RangeBounds<usize> + SliceIndex<str, Output = str>> Slice<R> for StrSpan<'a> {
+    fn slice(&self, range: R) -> Self {
+        let rel_start = match range.start_bound() {
+            Bound::Included(&i) if i == usize::MAX => i,
+            Bound::Included(&i) => i + 1,
+            Bound::Excluded(&i) => i,
+            Bound::Unbounded => 0,
+        };
+        let slice = self.inner.get(range).expect("Slice out of bounds");
+        let len = slice.len();
+        Self {
+            inner: slice,
+            span: Span {
+                start: self.span.start + rel_start,
+                end: self.span.start + rel_start + len,
+            },
+        }
     }
 }

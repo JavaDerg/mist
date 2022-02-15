@@ -13,22 +13,10 @@ fn tag_test() {
     let (i, o) = tag::<&str, StrSpan, Error<StrSpan>>("Hello")(span).unwrap();
 
     assert_eq!(o.inner.len(), 5);
-    assert_eq!(
-        o.span.start,
-        0,
-    );
-    assert_eq!(
-        o.span.end,
-        5,
-    );
+    assert_eq!(o.span.start, 0,);
+    assert_eq!(o.span.end, 5,);
 
     assert_eq!(i.inner.len(), 7);
-    assert_eq!(
-        i.span.start,
-        5,
-    );
-    assert_eq!(
-        i.span.end,
-        12,
-    );
+    assert_eq!(i.span.start, 5,);
+    assert_eq!(i.span.end, 12,);
 }
