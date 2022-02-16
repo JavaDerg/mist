@@ -2,13 +2,15 @@ use crate::parser::span::StrSpan;
 use nom::error::ErrorKind;
 use nom::{IResult, InputTakeAtPosition};
 
+pub mod error;
+mod source;
 pub mod span;
 #[cfg(test)]
 mod tests;
 pub mod token;
 pub mod value;
 
-pub fn space(i: StrSpan) -> IResult<StrSpan, StrSpan> {
+pub fn space_or_eof(i: StrSpan) -> IResult<StrSpan, StrSpan> {
     if i.inner.is_empty() {
         return Ok((i, i));
     }

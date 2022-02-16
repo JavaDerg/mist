@@ -1,8 +1,9 @@
 use std::collections::Bound;
-use std::ops::{Index, Range, RangeBounds, RangeFrom, RangeTo};
+use std::ops::{Deref, Index, Range, RangeBounds, RangeFrom, RangeTo};
 use std::slice::SliceIndex;
 use std::str::{CharIndices, Chars};
 
+use crate::parser::source::Source;
 use nom::character::complete::u64;
 use nom::error::{ErrorKind, ParseError};
 use nom::{
@@ -14,6 +15,7 @@ use nom::{
 pub struct StrSpan<'a> {
     pub inner: &'a str,
     pub span: Span,
+    pub source: Source,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -29,13 +31,14 @@ pub struct LinePos {
 }
 
 impl<'a> StrSpan<'a> {
-    pub fn new(str: &'a str) -> Self {
+    pub fn new(str: &'a str, source: Source) -> Self {
         Self {
             inner: str,
             span: Span {
                 start: 0,
                 end: str.len(),
             },
+            source,
         }
     }
 }
@@ -89,6 +92,7 @@ impl<'a> InputTake for StrSpan<'a> {
                 start: self.span.start,
                 end: self.span.start + count,
             },
+            source: self.source,
         }
     }
 
@@ -102,6 +106,7 @@ impl<'a> InputTake for StrSpan<'a> {
                     start: self.span.start + count,
                     end: self.span.end,
                 },
+                source: self.source,
             },
             Self {
                 inner: prefix,
@@ -109,6 +114,7 @@ impl<'a> InputTake for StrSpan<'a> {
                     start: self.span.start,
                     end: self.span.start + count,
                 },
+                source: self.source,
             },
         )
     }
@@ -293,6 +299,15 @@ impl<'a, R: RangeBounds<usize> + SliceIndex<str, Output = str>> Slice<R> for Str
                 start: self.span.start + rel_start,
                 end: self.span.start + rel_start + len,
             },
+            source: self.source,
         }
+    }
+}
+
+impl<'a> Deref for StrSpan<'a> {
+    type Target = &'a str;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
     }
 }

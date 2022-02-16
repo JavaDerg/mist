@@ -8,7 +8,7 @@ use nom::{
 fn tag_test() {
     use nom::bytes::complete::tag;
 
-    let span = StrSpan::new("Hello world!");
+    let span = StrSpan::new("Hello world!", 0);
 
     let (i, o) = tag::<&str, StrSpan, Error<StrSpan>>("Hello")(span).unwrap();
 
