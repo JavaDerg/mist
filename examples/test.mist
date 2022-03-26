@@ -13,3 +13,6 @@
     ". " print
     'i fib str println
 end
+
+'i . dbg
+ඞ dbg

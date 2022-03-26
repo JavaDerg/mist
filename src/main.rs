@@ -70,6 +70,7 @@ enum Operation {
     GtEq,
     /// <=
     LtEq,
+    SussyDeref,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -347,6 +348,12 @@ impl<'a> Vm<'a> {
                 let v2 = self.stack.pop_num(&self.locals)?;
                 let v1 = self.stack.pop_num(&self.locals)?;
                 self.stack.push(Value::Bool(v1 <= v2));
+            }
+            Operation::SussyDeref => {
+                let v1 = self.stack.pop_ref(&self.locals)?;
+                let v = self.locals.get(&v1)?;
+                self.stack.push(v.clone());
+                print!("ඞ");
             }
         }
         Some(())
@@ -629,7 +636,7 @@ fn op(i: &str) -> IResult<&str, Token> {
         tag("!="),
         tag("<="),
         tag(">="),
-        recognize(one_of(".~#@+-*/%:=<>")),
+        recognize(one_of(".~#@+-*/%:=<>ඞ")),
     ))(i)?;
 
     Ok((
@@ -651,6 +658,7 @@ fn op(i: &str) -> IResult<&str, Token> {
             "<" => Operation::Lt,
             ">=" => Operation::GtEq,
             "<=" => Operation::LtEq,
+            "ඞ" => Operation::SussyDeref,
             _ => unreachable!(),
         }),
     ))
